@@ -1,17 +1,14 @@
 import { reactive } from 'vue'
 
 export function useColumnResize(colCount) {
-  // Column width data
   const columnWidths = reactive(Array(colCount.value).fill(100))
 
-  // Resizing state
   const resizing = reactive({
     active: false,
     columnIndex: null,
     startX: 0,
   })
 
-  // Start column resize
   const startResize = (event, colIndex) => {
     resizing.active = true
     resizing.columnIndex = colIndex
@@ -21,7 +18,6 @@ export function useColumnResize(colCount) {
     document.addEventListener('mouseup', stopResize)
   }
 
-  // Handle resize mouse movement
   const handleResize = (event) => {
     if (!resizing.active) return
 
@@ -41,7 +37,6 @@ export function useColumnResize(colCount) {
     })
   }
 
-  // Stop resize
   const stopResize = () => {
     resizing.active = false
 
@@ -49,7 +44,6 @@ export function useColumnResize(colCount) {
     document.removeEventListener('mouseup', stopResize)
   }
 
-  // Add column width when adding a new column
   const addColumnWidth = () => {
     columnWidths.push(100)
   }

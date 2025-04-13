@@ -1,7 +1,6 @@
 import { ref } from 'vue'
 
 export function useFormulas(rowCount, colCount, gridData) {
-  // Convert column label (A, B, AA, etc.) to a zero-based index
   const colLabelToIndex = (label) => {
     let index = 0
     for (let i = 0; i < label.length; i++) {
@@ -10,7 +9,6 @@ export function useFormulas(rowCount, colCount, gridData) {
     return index - 1
   }
 
-  // Convert a zero-based index to a column label (A, B, AA, etc.)
   const getColumnLabel = (index) => {
     let label = ''
     index++
@@ -24,12 +22,10 @@ export function useFormulas(rowCount, colCount, gridData) {
     return label
   }
 
-  // Get cell reference in A1 notation
   const getCellReference = (row, col) => {
     return getColumnLabel(col) + (row + 1)
   }
 
-  // Parse and evaluate a formula
   const parseFormula = (formula, row, col) => {
     try {
       if (!formula.startsWith('=')) return formula
@@ -75,7 +71,6 @@ export function useFormulas(rowCount, colCount, gridData) {
     }
   }
 
-  // Display the value for a cell, evaluating formulas if needed
   const displayCellValue = (row, col) => {
     const value = gridData[row][col]
     if (typeof value === 'string' && value.startsWith('=')) {

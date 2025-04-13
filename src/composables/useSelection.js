@@ -12,12 +12,10 @@ export function useSelection(rowCount, colCount, gridData) {
   const editing = reactive({ row: null, col: null })
   const editValue = ref('')
 
-  // Check if we have a range selection
   const hasSelection = () => {
     return selectionRange.startRow !== null && selectionRange.endRow !== null
   }
 
-  // Get the boundaries of the selection (handling cases where user selects from bottom-right to top-left)
   const getSelectionBoundaries = () => {
     if (hasSelection()) {
       return {
@@ -36,12 +34,10 @@ export function useSelection(rowCount, colCount, gridData) {
     }
   }
 
-  // Check if a cell is the currently selected cell
   const isSelectedCell = (row, col) => {
     return selectedCell.row === row && selectedCell.col === col
   }
 
-  // Check if a cell is in the selected range
   const isInSelectedRange = (row, col) => {
     if (!selectionRange.startRow && !selectionRange.endRow) return false
 
@@ -53,7 +49,6 @@ export function useSelection(rowCount, colCount, gridData) {
     return row >= minRow && row <= maxRow && col >= minCol && col <= maxCol
   }
 
-  // Select a single cell
   const selectCell = (row, col, event) => {
     if (editing.row !== null && editing.col !== null) {
       finishEditing()
@@ -77,7 +72,6 @@ export function useSelection(rowCount, colCount, gridData) {
     }
   }
 
-  // Select an entire row
   const selectEntireRow = (rowIndex) => {
     if (editing.row !== null && editing.col !== null) {
       finishEditing()
@@ -92,7 +86,6 @@ export function useSelection(rowCount, colCount, gridData) {
     selectedCell.col = 0
   }
 
-  // Select an entire column
   const selectEntireColumn = (colIndex) => {
     if (editing.row !== null && editing.col !== null) {
       finishEditing()
@@ -107,7 +100,6 @@ export function useSelection(rowCount, colCount, gridData) {
     selectedCell.col = colIndex
   }
 
-  // Start range selection (for mouse drag)
   const startRangeSelection = (row, col, event) => {
     if (event.button !== 0) return
 
@@ -122,7 +114,6 @@ export function useSelection(rowCount, colCount, gridData) {
     rangeSelectionActive.value = true
   }
 
-  // Update range selection when dragging
   const updateRangeSelection = (row, col) => {
     if (rangeSelectionActive.value) {
       selectionRange.endRow = row
@@ -130,12 +121,10 @@ export function useSelection(rowCount, colCount, gridData) {
     }
   }
 
-  // End range selection
   const endRangeSelection = () => {
     rangeSelectionActive.value = false
   }
 
-  // Start editing a cell
   const editCell = (row, col) => {
     editing.row = row
     editing.col = col
@@ -152,7 +141,6 @@ export function useSelection(rowCount, colCount, gridData) {
     })
   }
 
-  // Handle key events in the editor
   const handleEditorKeyDown = (event) => {
     if (event.key === 'Enter' && !event.shiftKey) {
       event.preventDefault()
@@ -177,7 +165,6 @@ export function useSelection(rowCount, colCount, gridData) {
     }
   }
 
-  // Finish editing a cell
   const finishEditing = () => {
     if (editing.row !== null && editing.col !== null) {
       gridData[editing.row][editing.col] = editValue.value
@@ -186,18 +173,14 @@ export function useSelection(rowCount, colCount, gridData) {
     }
   }
 
-  // Handle keyboard navigation
   const handleKeyDown = (event) => {
-    // Ignore if we're currently editing
     if (editing.row !== null && editing.col !== null) return
 
-    // Edit on Enter
     if (event.key === 'Enter' && !event.shiftKey) {
       editCell(selectedCell.row, selectedCell.col)
       return
     }
 
-    // Navigation keys
     switch (event.key) {
       case 'ArrowUp':
         event.preventDefault()
@@ -226,14 +209,12 @@ export function useSelection(rowCount, colCount, gridData) {
       case 'Tab':
         event.preventDefault()
         if (event.shiftKey) {
-          // Move left
           if (selectedCell.col > 0) {
             selectCell(selectedCell.row, selectedCell.col - 1, { shiftKey: false })
           } else if (selectedCell.row > 0) {
             selectCell(selectedCell.row - 1, colCount.value - 1, { shiftKey: false })
           }
         } else {
-          // Move right
           if (selectedCell.col < colCount.value - 1) {
             selectCell(selectedCell.row, selectedCell.col + 1, { shiftKey: false })
           } else if (selectedCell.row < rowCount.value - 1) {

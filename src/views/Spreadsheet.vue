@@ -97,8 +97,6 @@ const {
 const { getColumnLabel, getCellReference, colLabelToIndex, parseFormula, displayCellValue } =
   useFormulas(rowCount, colCount, gridData)
 
-// Create local functions that will use the clipboard utilities
-// This allows us to modify their behavior without reassigning to constants
 const clipboardUtils = useClipboard(
   gridData,
   rowCount,
@@ -108,7 +106,6 @@ const clipboardUtils = useClipboard(
   hasSelection,
 )
 
-// Create wrapper functions so we don't reassign to constants
 const copySelectedCells = () => {
   clipboardUtils.copySelectedCells()
   showToastNotification()
@@ -122,10 +119,8 @@ const pasteFromClipboard = async () => {
   return await clipboardUtils.pasteFromClipboard()
 }
 
-// Initialize column resizing
 const { columnWidths, startResize, addColumnWidth } = useColumnResize(colCount)
 
-// Initialize export/import
 const { exportCSV, importCSV } = useExportImport(
   rowCount,
   colCount,
@@ -134,7 +129,6 @@ const { exportCSV, importCSV } = useExportImport(
   displayCellValue,
 )
 
-// Update the showCopyStatus function to use Bootstrap toast
 const showToastNotification = () => {
   const statusEl = document.getElementById('copy-status')
   if (statusEl && typeof bootstrap !== 'undefined') {
@@ -143,20 +137,16 @@ const showToastNotification = () => {
   }
 }
 
-// Handle keyboard events at the document level
 const setupKeyboardHandlers = () => {
   const handleGlobalKeyDown = (event) => {
-    // Ignore if we're currently editing
     if (editing.row !== null && editing.col !== null) return
 
-    // Copy (Ctrl+C)
     if (event.ctrlKey && (event.key === 'c' || event.key === 'C')) {
       event.preventDefault()
       copySelectedCells()
       return
     }
 
-    // Paste (Ctrl+V)
     if (event.ctrlKey && (event.key === 'v' || event.key === 'V')) {
       event.preventDefault()
       const pasteResult = pasteFromClipboard()
@@ -169,21 +159,18 @@ const setupKeyboardHandlers = () => {
       return
     }
 
-    // Cut (Ctrl+X)
     if (event.ctrlKey && (event.key === 'x' || event.key === 'X')) {
       event.preventDefault()
       cutSelectedCells()
       return
     }
 
-    // Handle other keyboard navigation
     handleKeyDown(event)
   }
 
   document.addEventListener('keydown', handleGlobalKeyDown)
 }
 
-// Add row at selection position
 const addRowAtSelection = () => {
   let insertIndex
 
@@ -199,7 +186,6 @@ const addRowAtSelection = () => {
   addRow(insertIndex)
 }
 
-// Add column at selection position
 const addColumnAtSelection = () => {
   let insertIndex
 
@@ -216,7 +202,6 @@ const addColumnAtSelection = () => {
   addColumnWidth()
 }
 
-// Setup spreadsheet on component mount
 onMounted(() => {
   setupKeyboardHandlers()
   resetSpreadsheet()
@@ -224,14 +209,6 @@ onMounted(() => {
 </script>
 
 <style>
-body {
-  background-color: #f8f9fa;
-  margin: 0;
-  padding: 0;
-  height: 100vh;
-  overflow: hidden;
-}
-
 .spreadsheet-app {
   width: 100%;
   height: 100vh;
@@ -249,7 +226,7 @@ body {
   border-radius: 0.5rem;
   box-shadow: 0 0.125rem 0.25rem rgba(0, 0, 0, 0.075);
   width: 100%;
-  max-width: 1200px; /* Set a max-width for larger screens */
+  max-width: 1200px;
   height: calc(100vh - 2rem);
   overflow: hidden;
 }

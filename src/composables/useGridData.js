@@ -7,27 +7,23 @@ export function useGridData() {
   const columns = computed(() => Array(colCount.value).fill(null))
   const rows = computed(() => Array(rowCount.value).fill(null))
 
-  // Initialize grid data with empty cells
   const gridData = reactive(
     Array(rowCount.value)
       .fill()
       .map(() => Array(colCount.value).fill('')),
   )
 
-  // Function to add a new row
   const addRow = (insertIndex) => {
     rowCount.value++
 
     const newRow = Array(colCount.value).fill('')
     gridData.splice(insertIndex, 0, newRow)
 
-    // Ensure gridData matches rowCount
     while (gridData.length > rowCount.value) {
       gridData.pop()
     }
   }
 
-  // Function to add a new column
   const addColumn = (insertIndex) => {
     colCount.value++
 
@@ -37,7 +33,6 @@ export function useGridData() {
       } else {
         gridData[i].splice(insertIndex, 0, '')
 
-        // Ensure row length matches colCount
         while (gridData[i].length < colCount.value) {
           gridData[i].push('')
         }
@@ -48,7 +43,6 @@ export function useGridData() {
     }
   }
 
-  // Function to reset spreadsheet with example data
   const resetSpreadsheet = () => {
     for (let i = 0; i < rowCount.value; i++) {
       for (let j = 0; j < colCount.value; j++) {
@@ -56,7 +50,6 @@ export function useGridData() {
       }
     }
 
-    // Add example data
     gridData[0][0] = '10'
     gridData[0][1] = '20'
     gridData[0][2] = '=A1+B1'

@@ -29,7 +29,8 @@
             :style="{ width: columnWidth + 'px' }"
             :class="{
               'selected-cell': isSelectedCell(rowIndex, colIndex),
-              'selected-range': isInSelectedRange(rowIndex, colIndex),
+              'selected-range':
+                isInSelectedRange(rowIndex, colIndex) && !isSelectedCell(rowIndex, colIndex),
             }"
             @click="selectCell(rowIndex, colIndex, $event)"
             @dblclick="editCell(rowIndex, colIndex)"
@@ -37,7 +38,10 @@
             @mouseover="updateRangeSelection(rowIndex, colIndex)"
             @mouseup="endRangeSelection()"
           >
-            <div v-if="!(editing.row === rowIndex && editing.col === colIndex)">
+            <div
+              v-if="!(editing.row === rowIndex && editing.col === colIndex)"
+              class="cell-content"
+            >
               {{ displayCellValue(rowIndex, colIndex) }}
             </div>
             <input
@@ -137,7 +141,7 @@ const props = defineProps({
   },
 })
 
-const columnWidth = ref(100) // Fixed column width for consistency
+const columnWidth = ref(100)
 
 defineEmits(['update:edit-value'])
 </script>
@@ -167,12 +171,22 @@ defineEmits(['update:edit-value'])
   border: 1px solid #dee2e6;
   text-align: center;
   vertical-align: middle;
-  padding: 0.25rem;
+  padding: 0;
   position: relative;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
   background-color: white;
+}
+
+.cell-content {
+  display: inline-block;
+  padding: 0.25rem 0.5rem;
+  border-radius: 3px;
+  max-width: 90%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  background-color: transparent;
 }
 
 .corner-cell {
@@ -231,6 +245,7 @@ defineEmits(['update:edit-value'])
   outline: none;
   z-index: 4;
   text-align: center;
+  background-color: white;
 }
 
 .resize-handle {

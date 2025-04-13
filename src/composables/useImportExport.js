@@ -1,5 +1,6 @@
+import { ref } from 'vue'
+
 export function useExportImport(rowCount, colCount, gridData, getColumnLabel, displayCellValue) {
-  // Export grid data to CSV
   const exportCSV = () => {
     const timestamp = new Date().toISOString().replace(/[-:.]/g, '').substring(0, 14)
     const filename = `spreadsheet_export_${timestamp}.csv`
@@ -54,7 +55,6 @@ export function useExportImport(rowCount, colCount, gridData, getColumnLabel, di
     document.body.removeChild(link)
   }
 
-  // Import CSV file
   const importCSV = (event) => {
     const file = event.target.files[0]
     if (!file) return
@@ -71,12 +71,66 @@ export function useExportImport(rowCount, colCount, gridData, getColumnLabel, di
           return
         }
 
-        // Process the CSV data here
-        // (This part is not fully implemented in the original code)
+        const csvHeader = rows[0].split(',')
+        const hasHeaderRow = csvHeader.length > 0 && csvHeader[0] === ''
+
+        const startRow = hasHeaderRow ? 1 : 0
+
+        for (let i = 0; i < rowCount.value; i++) {
+          for (let j = 0; j < colCount.value; j++) {
+            gridData[i][j] = ''
+          }
+        }
+
+        const csvRowCount = rows.length - startRow
+        const csvColCount =
+          Math.max(...rows.slice(startRow).map((row) => row.split(',').length)) - 1
+
+        if (csvRowCount > rowCount.value) {
+          const rowsToAdd = csvRowCount - rowCount.value
+          for (let i = 0; i < rowsToAdd; i++) {
+            const newRow = Array(colCount.value).fill('')
+            gridData.push(newRow)
+          }
+          rowCount.value = csvRowCount
+        }
+
+        if (csvColCount > colCount.value) {
+          const colsToAdd = csvColCount - colCount.value
+          colCount.value = csvColCount
+
+          for (let i = 0; i < rowCount.value; i++) {
+            while (gridData[i].length < colCount.value) {
+              gridData[i].push('')
+            }
+          }
+        }
+
+        for (let i = startRow; i < rows.length; i++) {
+          if (!rows[i].trim()) continue
+
+          const csvRow = rows[i].split(',')
+          const gridRowIndex = i - startRow
+
+          for (let j = 1; j < csvRow.length; j++) {
+            if (gridRowIndex < rowCount.value && j - 1 < colCount.value) {
+              let cellValue = csvRow[j]
+
+              if (cellValue.startsWith('"') && cellValue.endsWith('"')) {
+                cellValue = cellValue.substring(1, cellValue.length - 1).replace(/""/g, '"')
+              }
+
+              gridData[gridRowIndex][j - 1] = cellValue
+            }
+          }
+        }
 
         event.target.value = ''
+
+        console.log('CSV import completed successfully')
       } catch (error) {
         console.error('Error importing CSV:', error)
+        event.target.value = ''
       }
     }
 

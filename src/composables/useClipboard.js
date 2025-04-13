@@ -8,13 +8,11 @@ export function useClipboard(
   getSelectionBoundaries,
   hasSelection,
 ) {
-  // Internal clipboard for data
   const clipboard = reactive({
     data: [],
     hasData: false,
   })
 
-  // Copy selected cells
   const copySelectedCells = () => {
     const boundaries = getSelectionBoundaries()
     if (!boundaries) return
@@ -37,10 +35,8 @@ export function useClipboard(
 
     try {
       navigator.clipboard.writeText(tabDelimited)
-      // Note: We've moved the toast showing to the parent component
     } catch (e) {
       console.error("Couldn't access clipboard:", e)
-      // Fallback method using a hidden textarea
       const textarea = document.createElement('textarea')
       textarea.value = tabDelimited
       textarea.style.position = 'fixed'
@@ -49,15 +45,12 @@ export function useClipboard(
       textarea.select()
       document.execCommand('copy')
       document.body.removeChild(textarea)
-      // Note: We've moved the toast showing to the parent component
     }
   }
 
-  // Cut selected cells (copy then clear)
   const cutSelectedCells = () => {
     copySelectedCells()
 
-    // Clear the selected cells
     const { startRow, startCol, endRow, endCol } = getSelectionBoundaries()
     for (let i = startRow; i <= endRow; i++) {
       for (let j = startCol; j <= endCol; j++) {
@@ -66,13 +59,11 @@ export function useClipboard(
     }
   }
 
-  // Paste from clipboard
   const pasteFromClipboard = async () => {
     if (selectedCell.row === null || selectedCell.col === null) return
 
     let data
 
-    // Determine target cell based on selection range or selected cell
     let targetRow, targetCol
     if (hasSelection()) {
       const boundaries = getSelectionBoundaries()
@@ -83,11 +74,9 @@ export function useClipboard(
       targetCol = selectedCell.col
     }
 
-    // Try internal clipboard first
     if (clipboard.hasData) {
       data = clipboard.data
     } else {
-      // Fallback to system clipboard
       try {
         const text = await navigator.clipboard.readText()
         data = text.split('\n').map((line) => line.split('\t'))
@@ -99,12 +88,10 @@ export function useClipboard(
 
     if (!data || !data.length) return null
 
-    // Calculate required rows and columns
     const requiredRows = targetRow + data.length
     const maxColsInData = data.reduce((max, row) => Math.max(max, row.length), 0)
     const requiredCols = targetCol + maxColsInData
 
-    // Expand grid rows if needed
     if (requiredRows > rowCount.value) {
       const rowsToAdd = requiredRows - rowCount.value
       for (let i = 0; i < rowsToAdd; i++) {
@@ -114,12 +101,10 @@ export function useClipboard(
       rowCount.value += rowsToAdd
     }
 
-    // Expand grid columns if needed
     if (requiredCols > colCount.value) {
       const colsToAdd = requiredCols - colCount.value
       colCount.value += colsToAdd
 
-      // Extend each row with new columns
       gridData.forEach((row, index) => {
         const newRow = [...row]
         while (newRow.length < colCount.value) {
@@ -129,7 +114,6 @@ export function useClipboard(
       })
     }
 
-    // Paste data into grid
     for (let i = 0; i < data.length; i++) {
       const row = targetRow + i
       for (let j = 0; j < data[i].length; j++) {
