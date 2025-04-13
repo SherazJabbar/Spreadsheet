@@ -17,8 +17,8 @@ A simple yet powerful spreadsheet application built with Vue 3 using the Composi
 # Install dependencies
 npm install
 
-# Serve with hot reload at localhost:8080
-npm run serve
+# Serve with hot reload at localhost:5173
+npm run dev
 
 # Build for production
 npm run build
@@ -48,7 +48,6 @@ The spreadsheet supports basic formula evaluation. To use formulas:
 
 1. Start with an equals sign (`=`)
 2. Reference cells by their address (e.g., `A1`, `B2`)
-3. Use standard operators (`+`, `-`, `*`, `/`)
 
 Example: `=A1+B1` will add the values in cells A1 and B1.
 
@@ -64,10 +63,10 @@ Example: `=A1+B1` will add the values in cells A1 and B1.
 spreadsheet-app/
 ├── src/
 │   ├── assets/
-│   │   └── styles.css        # Global styles
+│   │   └── main.css        # Global styles
 │   ├── components/
 │   │   └── Spreadsheet/      # Spreadsheet components
-│   │       ├── index.vue     # Main spreadsheet component
+│   │
 │   │       ├── SpreadsheetHeader.vue
 │   │       └── SpreadsheetTable.vue
 │   ├── composables/          # Reusable composable functions
@@ -77,9 +76,12 @@ spreadsheet-app/
 │   │   ├── useFormulas.js
 │   │   ├── useGridData.js
 │   │   └── useSelection.js
-│   ├── App.vue               # Root component
+|   |── views/
+|   |   ├── spreadsheet.vue     # Main spreadsheet component
+│   ├── App.vue                # Root component
 │   └── main.js               # Application entry point
 └── public/
     └── index.html            # HTML template
 ```
+
 # Spreadsheet
