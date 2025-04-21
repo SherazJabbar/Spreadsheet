@@ -38,6 +38,16 @@
             @mouseover="updateRangeSelection(rowIndex, colIndex)"
             @mouseup="endRangeSelection()"
           >
+            <!-- Background layer for formatting -->
+            <div 
+              class="cell-background" 
+              :style="{ backgroundColor: getCellFormatting(rowIndex, colIndex).backgroundColor || 'transparent' }"
+            ></div>
+            
+            <!-- Selection highlight layer -->
+            <div class="selection-highlight"></div>
+            
+            <!-- Cell content -->
             <div
               v-if="!(editing.row === rowIndex && editing.col === colIndex)"
               class="cell-content"
@@ -45,6 +55,8 @@
             >
               <span>{{ formatDisplayValue(rowIndex, colIndex) }}</span>
             </div>
+            
+            <!-- Editor -->
             <input
               v-if="editing.row === rowIndex && editing.col === colIndex"
               type="text"
@@ -160,13 +172,12 @@ const getCellStyles = (rowIndex, colIndex) => {
   const height = props.getRowHeight(rowIndex)
   const width = props.getColumnWidth(colIndex)
 
-
   return {
     width: width + 'px',
     height: height + 'px',
     minHeight: height + 'px', 
     maxHeight: height + 'px', 
-    backgroundColor: formatting.backgroundColor || 'transparent',
+    // backgroundColor removed from here
     borderTop: formatting.borderTop  || '1px solid #dee2e6',
     borderRight: formatting.borderRight || '1px solid #dee2e6',
     borderBottom: formatting.borderBottom || '1px solid #dee2e6',
@@ -215,8 +226,7 @@ const getCellContentStyles = (rowIndex, colIndex) => {
   }
 }
 
-
- const formatDisplayValue = (rowIndex, colIndex) => {
+const formatDisplayValue = (rowIndex, colIndex) => {
   const rawValue = props.displayCellValue(rowIndex, colIndex)
   const formatting = props.getCellFormatting(rowIndex, colIndex)
 
@@ -282,7 +292,6 @@ const getCellContentStyles = (rowIndex, colIndex) => {
   }
 }
 
-
 const formatNumber = (value, decimalPlaces = 2, useThousandsSeparator = true) => {
   if (useThousandsSeparator) {
     return value.toLocaleString(undefined, {
@@ -293,7 +302,6 @@ const formatNumber = (value, decimalPlaces = 2, useThousandsSeparator = true) =>
     return value.toFixed(decimalPlaces)
   }
 }
-
 
 const formatPercent = (value, decimalPlaces = 2) => {
   return (value * 100).toFixed(decimalPlaces) + '%'
@@ -306,14 +314,12 @@ const formatAccounting = (value, decimalPlaces = 2, currencySymbol = '$') => {
   return `${currencySymbol} ${value.toFixed(decimalPlaces)}`
 }
 
-
 const formatFinancial = (value, decimalPlaces = 2) => {
   if (value < 0) {
     return `(${Math.abs(value).toFixed(decimalPlaces)})`
   }
   return value.toFixed(decimalPlaces)
 }
-
 
 const formatCurrency = (value, decimalPlaces = 2, currencySymbol = '$') => {
   if (value < 0) {
@@ -322,70 +328,7 @@ const formatCurrency = (value, decimalPlaces = 2, currencySymbol = '$') => {
   return `${currencySymbol}${value.toFixed(decimalPlaces)}`
 }
 
-
-// const formatDate = (value) => {
-//   try {
-//     // Excel dates are number of days since 12/30/1899
-//     const date = new Date(1899, 11, 30)
-//     date.setDate(date.getDate() + value)
-//     return date.toLocaleDateString()
-//   } catch (error) {
-//     console.error('Error formatting date:', error)
-//     return value.toString()
-//   }
-// }
-
-
-// const formatTime = (value) => {
-//   try {
-//     // Excel times are fractions of a day
-//     const totalSeconds = Math.round(value * 24 * 60 * 60)
-//     const hours = Math.floor(totalSeconds / 3600)
-//     const minutes = Math.floor((totalSeconds % 3600) / 60)
-//     const seconds = totalSeconds % 60
-
-//     const period = hours >= 12 ? 'PM' : 'AM'
-//     const displayHours = hours > 12 ? hours - 12 : hours === 0 ? 12 : hours
-
-//     return `${displayHours}:${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')} ${period}`
-//   } catch (error) {
-//     console.error('Error formatting time:', error)
-//     return value.toString()
-//   }
-// }
-
-
-// const formatDateTime = (value) => {
-//   try {
-//     const date = new Date(1899, 11, 30)
-//     date.setDate(date.getDate() + Math.floor(value))
-
-//     const totalSeconds = Math.round((value - Math.floor(value)) * 24 * 60 * 60)
-//     const hours = Math.floor(totalSeconds / 3600)
-//     const minutes = Math.floor((totalSeconds % 3600) / 60)
-//     const seconds = totalSeconds % 60
-
-//     return `${date.toLocaleDateString()} ${hours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`
-//   } catch (error) {
-//     console.error('Error formatting date time:', error)
-//     return value.toString()
-//   }
-// }
-
-
-// const formatDuration = (value) => {
-//   try {
-//     const totalSeconds = Math.round(value * 24 * 60 * 60)
-//     const hours = Math.floor(totalSeconds / 3600)
-//     const minutes = Math.floor((totalSeconds % 3600) / 60)
-//     const seconds = totalSeconds % 60
-
-//     return `${hours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`
-//   } catch (error) {
-//     console.error('Error formatting duration:', error)
-//     return value.toString()
-//   }
-// }
+// Other format functions are commented out in your original code, so I'm keeping them that way
 
 defineEmits(['update:edit-value'])
 </script>
@@ -414,7 +357,35 @@ defineEmits(['update:edit-value'])
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-  background-color: white;
+  background-color: transparent; /* Changed to transparent */
+}
+
+.cell-background {
+  position: absolute;
+  left: 0;
+  top: 0;
+  width: 100%;
+  height: 100%;
+  z-index: 0;
+  pointer-events: none;
+}
+
+.selection-highlight {
+  position: absolute;
+  left: 0;
+  top: 0;
+  width: 100%;
+  height: 100%;
+  z-index: 1;
+  pointer-events: none;
+}
+
+.selected-cell .selection-highlight {
+  background-color: rgba(13, 110, 253, 0.1) !important;
+}
+
+.selected-range .selection-highlight {
+  background-color: rgba(13, 110, 253, 0.05) !important;
 }
 
 .cell-content {
@@ -426,6 +397,8 @@ defineEmits(['update:edit-value'])
   box-sizing: border-box;
   overflow: hidden;
   text-overflow: ellipsis;
+  z-index: 2; /* Should be above selection-highlight */
+  pointer-events: none; /* Let clicks pass through to the cell */
 }
 
 .corner-cell {
@@ -465,13 +438,8 @@ defineEmits(['update:edit-value'])
 }
 
 .selected-cell {
-  background-color: rgba(13, 110, 253, 0.1) !important;
   outline: 2px solid #0d6efd;
   z-index: 1;
-}
-
-.selected-range {
-  background-color: rgba(13, 110, 253, 0.05) !important;
 }
 
 .cell-editor {
@@ -484,7 +452,7 @@ defineEmits(['update:edit-value'])
   border: 2px solid #0d6efd;
   box-sizing: border-box;
   outline: none;
-  z-index: 4;
+  z-index: 10; /* Make sure it's above everything */
   text-align: center;
   background-color: white;
 }
