@@ -9,7 +9,7 @@
             :key="'col-' + colIndex"
             class="cell column-header"
             @click="selectEntireColumn(colIndex)"
-            :style="{ width: columnWidth + 'px' }"
+            :style="{ width: getColumnWidth(colIndex) + 'px' }"
           >
             {{ getColumnLabel(colIndex) }}
             <div class="resize-handle" @mousedown="startResize($event, colIndex)"></div>
@@ -26,7 +26,7 @@
             v-for="(_, colIndex) in columns"
             :key="'cell-' + rowIndex + '-' + colIndex"
             class="cell"
-            :style="{ width: columnWidth + 'px' }"
+            :style="getCellStyles(rowIndex, colIndex)"
             :class="{
               'selected-cell': isSelectedCell(rowIndex, colIndex),
               'selected-range':
@@ -41,8 +41,9 @@
             <div
               v-if="!(editing.row === rowIndex && editing.col === colIndex)"
               class="cell-content"
+              :style="getCellContentStyles(rowIndex, colIndex)"
             >
-              {{ displayCellValue(rowIndex, colIndex) }}
+              <span>{{ formatDisplayValue(rowIndex, colIndex) }}</span>
             </div>
             <input
               v-if="editing.row === rowIndex && editing.col === colIndex"
@@ -64,9 +65,8 @@
 </template>
 
 <script setup>
-import { ref } from 'vue'
+import { ref, computed } from 'vue'
 
-// Define props with types
 const props = defineProps({
   columns: {
     type: Object,
@@ -139,9 +139,253 @@ const props = defineProps({
   editValue: {
     required: true,
   },
+  getCellFormatting: {
+    type: Function,
+    required: true,
+  },
+  getRowHeight: {
+    type: Function,
+    required: true,
+    default: () => 35,
+  },
+  getColumnWidth: {
+    type: Function,
+    required: true,
+    default: () => 100,
+  },
 })
 
-const columnWidth = ref(100)
+const getCellStyles = (rowIndex, colIndex) => {
+  const formatting = props.getCellFormatting(rowIndex, colIndex)
+  const height = props.getRowHeight(rowIndex)
+  const width = props.getColumnWidth(colIndex)
+
+
+  return {
+    width: width + 'px',
+    height: height + 'px',
+    minHeight: height + 'px', 
+    maxHeight: height + 'px', 
+    backgroundColor: formatting.backgroundColor || 'transparent',
+    borderTop: formatting.borderTop  || '1px solid #dee2e6',
+    borderRight: formatting.borderRight || '1px solid #dee2e6',
+    borderBottom: formatting.borderBottom || '1px solid #dee2e6',
+    borderLeft: formatting.borderLeft || '1px solid #dee2e6',
+    overflow: formatting.wrapText ? 'auto' : 'hidden',
+    whiteSpace: formatting.wrapText ? 'normal' : 'nowrap',
+    verticalAlign: formatting.verticalAlign || 'middle',
+    position: 'relative',
+    padding: 0,
+  }
+}
+
+const getCellContentStyles = (rowIndex, colIndex) => {
+  const formatting = props.getCellFormatting(rowIndex, colIndex)
+
+  return {
+    fontWeight: formatting.bold ? 'bold' : 'normal',
+    fontStyle: formatting.italic ? 'italic' : 'normal',
+    textDecoration: formatting.underline ? 'underline' : 'none',
+    color: formatting.textColor || '#000000',
+    fontSize: formatting.fontSize || '14px',
+    fontFamily: formatting.fontFamily || 'Arial, sans-serif',
+    width: '100%',
+    height: '100%',
+    display: 'flex',
+    alignItems:
+      formatting.verticalAlign === 'top'
+        ? 'flex-start'
+        : formatting.verticalAlign === 'bottom'
+          ? 'flex-end'
+          : 'center',
+    justifyContent:
+      formatting.align === 'left'
+        ? 'flex-start'
+        : formatting.align === 'right'
+          ? 'flex-end'
+          : 'center',
+    textAlign: formatting.align || 'center',
+    padding: '0 4px',
+    boxSizing: 'border-box',
+    transform: `rotate(${formatting.textRotation || 0}deg)`,
+    transformOrigin: 'center center',
+    whiteSpace: formatting.wrapText ? 'normal' : 'nowrap',
+    overflow: 'hidden',
+    textOverflow: 'ellipsis',
+  }
+}
+
+
+ const formatDisplayValue = (rowIndex, colIndex) => {
+  const rawValue = props.displayCellValue(rowIndex, colIndex)
+  const formatting = props.getCellFormatting(rowIndex, colIndex)
+
+  if (rawValue === '' || rawValue === null || rawValue === undefined) {
+    return ''
+  }
+
+  const numericValue = Number(rawValue)
+  if (isNaN(numericValue)) {
+    return rawValue 
+  }
+
+  const decimalPlaces = formatting.decimalPlaces !== undefined ? formatting.decimalPlaces : 2
+
+  try {
+    switch (formatting.numberFormat) {
+      case 'auto':
+    
+        if (formatting.decimalPlaces !== undefined && formatting.decimalPlaces !== 2) {
+          return numericValue.toFixed(decimalPlaces)
+        }
+        return rawValue
+        
+      case 'plaintext':
+        return rawValue.toString()
+
+      case 'number':
+        return formatNumber(
+          numericValue,
+          decimalPlaces,
+          formatting.useThousandsSeparator,
+        )
+
+      case 'percent':
+        return formatPercent(numericValue, decimalPlaces)
+
+      case 'scientific':
+        return numericValue.toExponential(decimalPlaces)
+
+      case 'accounting':
+        return formatAccounting(numericValue, decimalPlaces, formatting.currencySymbol)
+
+      case 'financial':
+        return formatFinancial(numericValue, decimalPlaces)
+
+      case 'currency':
+        return formatCurrency(numericValue, decimalPlaces, formatting.currencySymbol)
+
+      case 'custom':
+        if (formatting.customFormat === '.00+') {
+          return numericValue.toFixed(decimalPlaces)
+        } else if (formatting.customFormat === '+.00') {
+          return (numericValue >= 0 ? '+' : '') + numericValue.toFixed(decimalPlaces)
+        }
+        return numericValue.toFixed(decimalPlaces)
+
+      default:
+        return rawValue // Default to raw value instead of fixed decimal places
+    }
+  } catch (error) {
+    console.error('Error formatting cell value:', error)
+    return rawValue
+  }
+}
+
+
+const formatNumber = (value, decimalPlaces = 2, useThousandsSeparator = true) => {
+  if (useThousandsSeparator) {
+    return value.toLocaleString(undefined, {
+      minimumFractionDigits: decimalPlaces,
+      maximumFractionDigits: decimalPlaces,
+    })
+  } else {
+    return value.toFixed(decimalPlaces)
+  }
+}
+
+
+const formatPercent = (value, decimalPlaces = 2) => {
+  return (value * 100).toFixed(decimalPlaces) + '%'
+}
+
+const formatAccounting = (value, decimalPlaces = 2, currencySymbol = '$') => {
+  if (value < 0) {
+    return `(${currencySymbol} ${Math.abs(value).toFixed(decimalPlaces)})`
+  }
+  return `${currencySymbol} ${value.toFixed(decimalPlaces)}`
+}
+
+
+const formatFinancial = (value, decimalPlaces = 2) => {
+  if (value < 0) {
+    return `(${Math.abs(value).toFixed(decimalPlaces)})`
+  }
+  return value.toFixed(decimalPlaces)
+}
+
+
+const formatCurrency = (value, decimalPlaces = 2, currencySymbol = '$') => {
+  if (value < 0) {
+    return `-${currencySymbol}${Math.abs(value).toFixed(decimalPlaces)}`
+  }
+  return `${currencySymbol}${value.toFixed(decimalPlaces)}`
+}
+
+
+// const formatDate = (value) => {
+//   try {
+//     // Excel dates are number of days since 12/30/1899
+//     const date = new Date(1899, 11, 30)
+//     date.setDate(date.getDate() + value)
+//     return date.toLocaleDateString()
+//   } catch (error) {
+//     console.error('Error formatting date:', error)
+//     return value.toString()
+//   }
+// }
+
+
+// const formatTime = (value) => {
+//   try {
+//     // Excel times are fractions of a day
+//     const totalSeconds = Math.round(value * 24 * 60 * 60)
+//     const hours = Math.floor(totalSeconds / 3600)
+//     const minutes = Math.floor((totalSeconds % 3600) / 60)
+//     const seconds = totalSeconds % 60
+
+//     const period = hours >= 12 ? 'PM' : 'AM'
+//     const displayHours = hours > 12 ? hours - 12 : hours === 0 ? 12 : hours
+
+//     return `${displayHours}:${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')} ${period}`
+//   } catch (error) {
+//     console.error('Error formatting time:', error)
+//     return value.toString()
+//   }
+// }
+
+
+// const formatDateTime = (value) => {
+//   try {
+//     const date = new Date(1899, 11, 30)
+//     date.setDate(date.getDate() + Math.floor(value))
+
+//     const totalSeconds = Math.round((value - Math.floor(value)) * 24 * 60 * 60)
+//     const hours = Math.floor(totalSeconds / 3600)
+//     const minutes = Math.floor((totalSeconds % 3600) / 60)
+//     const seconds = totalSeconds % 60
+
+//     return `${date.toLocaleDateString()} ${hours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`
+//   } catch (error) {
+//     console.error('Error formatting date time:', error)
+//     return value.toString()
+//   }
+// }
+
+
+// const formatDuration = (value) => {
+//   try {
+//     const totalSeconds = Math.round(value * 24 * 60 * 60)
+//     const hours = Math.floor(totalSeconds / 3600)
+//     const minutes = Math.floor((totalSeconds % 3600) / 60)
+//     const seconds = totalSeconds % 60
+
+//     return `${hours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`
+//   } catch (error) {
+//     console.error('Error formatting duration:', error)
+//     return value.toString()
+//   }
+// }
 
 defineEmits(['update:edit-value'])
 </script>
@@ -163,13 +407,7 @@ defineEmits(['update:edit-value'])
 }
 
 .cell {
-  width: 100px;
-  min-width: 100px;
-  max-width: 100px;
-  height: 35px;
-  min-height: 35px;
   border: 1px solid #dee2e6;
-  text-align: center;
   vertical-align: middle;
   padding: 0;
   position: relative;
@@ -180,13 +418,14 @@ defineEmits(['update:edit-value'])
 }
 
 .cell-content {
-  display: inline-block;
-  padding: 0.25rem 0.5rem;
-  border-radius: 3px;
-  max-width: 90%;
+  position: absolute;
+  left: 0;
+  top: 0;
+  width: 100%;
+  height: 100%;
+  box-sizing: border-box;
   overflow: hidden;
   text-overflow: ellipsis;
-  background-color: transparent;
 }
 
 .corner-cell {
@@ -210,6 +449,7 @@ defineEmits(['update:edit-value'])
   color: #6c757d;
   user-select: none;
   cursor: pointer;
+  text-align: center;
 }
 
 .column-header {
@@ -221,6 +461,7 @@ defineEmits(['update:edit-value'])
   color: #6c757d;
   user-select: none;
   cursor: pointer;
+  text-align: center;
 }
 
 .selected-cell {
@@ -239,7 +480,7 @@ defineEmits(['update:edit-value'])
   top: 0;
   width: 100%;
   height: 100%;
-  padding: 0.25rem;
+  padding: 0 4px;
   border: 2px solid #0d6efd;
   box-sizing: border-box;
   outline: none;
