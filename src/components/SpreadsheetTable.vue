@@ -77,7 +77,6 @@
 </template>
 
 <script setup>
-import { ref, computed } from 'vue'
 
 const props = defineProps({
   columns: {
@@ -328,7 +327,7 @@ const formatCurrency = (value, decimalPlaces = 2, currencySymbol = '$') => {
   return `${currencySymbol}${value.toFixed(decimalPlaces)}`
 }
 
-// Other format functions are commented out in your original code, so I'm keeping them that way
+
 
 defineEmits(['update:edit-value'])
 </script>
@@ -357,7 +356,7 @@ defineEmits(['update:edit-value'])
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-  background-color: transparent; /* Changed to transparent */
+  background-color: transparent; 
 }
 
 .cell-background {
@@ -397,8 +396,8 @@ defineEmits(['update:edit-value'])
   box-sizing: border-box;
   overflow: hidden;
   text-overflow: ellipsis;
-  z-index: 2; /* Should be above selection-highlight */
-  pointer-events: none; /* Let clicks pass through to the cell */
+  z-index: 2;
+  pointer-events: none; 
 }
 
 .corner-cell {
@@ -438,7 +437,6 @@ defineEmits(['update:edit-value'])
 }
 
 .selected-cell {
-  outline: 2px solid #0d6efd;
   z-index: 1;
 }
 
@@ -452,7 +450,7 @@ defineEmits(['update:edit-value'])
   border: 2px solid #0d6efd;
   box-sizing: border-box;
   outline: none;
-  z-index: 10; /* Make sure it's above everything */
+  z-index: 10; 
   text-align: center;
   background-color: white;
 }

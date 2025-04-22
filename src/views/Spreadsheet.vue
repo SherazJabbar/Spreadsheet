@@ -11,7 +11,7 @@
         :current-formatting="getCurrentCellFormatting()"
       />
 
-      <div class="spreadsheet-container">
+      <div class="spreadsheet-container" @contextmenu.prevent="showContextMenu">
         <SpreadsheetTable
           :columns="columns"
           :rows="rows"
@@ -35,10 +35,44 @@
           :get-cell-formatting="getCellFormatting"
           :get-row-height="getRowHeight"
           :get-column-width="getColumnWidth"
+          @contextmenu.prevent="onCellContextMenu"
         />
       </div>
     </div>
 
+    <!-- Context Menu Component -->
+    <ContextMenu
+      :is-visible="contextMenuVisible"
+      :position="contextMenuPosition"
+      @command="handleContextMenuCommand"
+      @close="closeContextMenu"
+    />
+
+    <!-- Conditional Formatting Panel -->
+    <ConditionalFormattingPanel
+      :is-open="conditionalFormattingUI.isOpen"
+      :selected-range="conditionalFormattingUI.selectedRange"
+      :editing-rule-id="conditionalFormattingUI.editingRule"
+      :rule-types="ruleTypes"
+      :format-colors="formatColors"
+      :conditional-rules="conditionalRules"
+      :selected-rule-type="conditionalFormattingUI.selectedRuleType"
+      :criterion1="conditionalFormattingUI.criterion1"
+      :criterion2="conditionalFormattingUI.criterion2"
+      :selected-format="conditionalFormattingUI.selectedFormat"
+      :get-column-label="getColumnLabel"
+      @close="closeConditionalFormatting"
+      @add-rule="addConditionalRule"
+      @update-rule="updateConditionalRule"
+      @delete-rule="deleteConditionalRule"
+      @edit-rule="editConditionalRule"
+      @change-rule-type="onChangeRuleType"
+      @update-criterion1="onUpdateCriterion1"
+      @update-criterion2="onUpdateCriterion2"
+      @update-format="onUpdateFormat"
+    />
+
+    <!-- Toast Notification for copy/paste operations -->
     <div class="position-fixed bottom-0 end-0 p-3" style="z-index: 11">
       <div
         class="toast align-items-center text-white bg-dark border-0"
@@ -64,16 +98,18 @@
 </template>
 
 <script setup>
-import { onMounted, ref, nextTick } from 'vue'
+import { onMounted, ref } from 'vue'
 import SpreadsheetHeader from '@/components/SpreadsheetHeader.vue'
 import SpreadsheetTable from '@/components/SpreadsheetTable.vue'
+import ContextMenu from '@/components/ContextMenu.vue'
+import ConditionalFormattingPanel from '@/components/ConditionalFormattingPanel.vue'
 
 import { useGridData } from '@/composables/useGridData'
 import { useSelection } from '@/composables/useSelection'
 import { useFormulas } from '@/composables/useFormulas'
 import { useClipboard } from '@/composables/useClipboard'
-import { useColumnResize } from '@/composables/useColumnResize'
 import { useExportImport } from '@/composables/useImportExport'
+import { useConditionalFormatting } from '@/composables/useConditionalFormatting'
 
 // Get grid data with all formatting features
 const {
@@ -82,9 +118,6 @@ const {
   columns,
   rows,
   gridData,
-  cellFormatting,
-  rowHeights,
-  columnWidths,
   getCellFormatting,
   updateCellFormatting,
   applyFormattingToRange,
@@ -94,7 +127,7 @@ const {
   setColumnWidth,
   addRow,
   addColumn,
-  resetSpreadsheet
+  resetSpreadsheet,
 } = useGridData()
 
 // Use existing selection composable
@@ -119,7 +152,7 @@ const {
   handleKeyDown,
 } = useSelection(rowCount, colCount, gridData)
 
-const { getColumnLabel, getCellReference, colLabelToIndex, parseFormula, displayCellValue } =
+const { getColumnLabel, displayCellValue } =
   useFormulas(rowCount, colCount, gridData)
 
 const clipboardUtils = useClipboard(
@@ -130,6 +163,31 @@ const clipboardUtils = useClipboard(
   getSelectionBoundaries,
   hasSelection,
 )
+
+const { exportCSV, importCSV } = useExportImport(
+  rowCount,
+  colCount,
+  gridData,
+  getColumnLabel,
+  displayCellValue,
+)
+
+const contextMenuVisible = ref(false)
+const contextMenuPosition = ref({ x: 0, y: 0 })
+
+const {
+  conditionalRules,
+  ruleTypes,
+  formatColors,
+  conditionalFormattingUI,
+  openConditionalFormatting,
+  closeConditionalFormatting,
+  addConditionalRule,
+  editConditionalRule,
+  updateConditionalRule,
+  deleteConditionalRule,
+  applyConditionalFormattingToGrid,
+} = useConditionalFormatting(rowCount, colCount, gridData, getCellFormatting, updateCellFormatting)
 
 const copySelectedCells = () => {
   clipboardUtils.copySelectedCells()
@@ -147,30 +205,21 @@ const pasteFromClipboard = async () => {
 const startResize = (event, colIndex) => {
   const startX = event.clientX
   const startWidth = getColumnWidth(colIndex)
-  
+
   const handleMouseMove = (moveEvent) => {
     const delta = moveEvent.clientX - startX
     const newWidth = Math.max(50, startWidth + delta)
     setColumnWidth(colIndex, newWidth)
   }
-  
+
   const handleMouseUp = () => {
     document.removeEventListener('mousemove', handleMouseMove)
     document.removeEventListener('mouseup', handleMouseUp)
   }
-  
+
   document.addEventListener('mousemove', handleMouseMove)
   document.addEventListener('mouseup', handleMouseUp)
 }
-
-const { exportCSV, importCSV } = useExportImport(
-  rowCount,
-  colCount,
-  gridData,
-  getColumnLabel,
-  displayCellValue,
-)
-
 
 const getCurrentCellFormatting = () => {
   if (hasSelection()) {
@@ -182,23 +231,20 @@ const getCurrentCellFormatting = () => {
   return null
 }
 
-
- const applyFormatting = (formatting) => {
-
+const applyFormatting = (formatting) => {
   if (hasSelection()) {
-    const { startRow, startCol, endRow, endCol } = getSelectionBoundaries();
-    applyFormattingToRange(startRow, startCol, endRow, endCol, formatting);
+    const { startRow, startCol, endRow, endCol } = getSelectionBoundaries()
+    applyFormattingToRange(startRow, startCol, endRow, endCol, formatting)
   } else if (selectedCell.row !== null && selectedCell.col !== null) {
-    updateCellFormatting(selectedCell.row, selectedCell.col, formatting);
+    updateCellFormatting(selectedCell.row, selectedCell.col, formatting)
   }
-  
-  const tempRow = selectedCell.row;
-  selectedCell.row = -1;
-  setTimeout(() => {
-    selectedCell.row = tempRow;
-  }, 0);
-};
 
+  const tempRow = selectedCell.row
+  selectedCell.row = -1
+  setTimeout(() => {
+    selectedCell.row = tempRow
+  }, 0)
+}
 
 const showToastNotification = () => {
   const statusEl = document.getElementById('copy-status')
@@ -208,6 +254,168 @@ const showToastNotification = () => {
   }
 }
 
+/**
+ * Show context menu at the specified position
+ */
+const showContextMenu = (event) => {
+  // Only show if we clicked inside the spreadsheet grid
+  if (event.target.closest('.spreadsheet-table')) {
+    contextMenuPosition.value = { x: event.clientX, y: event.clientY }
+    contextMenuVisible.value = true
+    event.preventDefault()
+  }
+}
+
+/**
+ * Handler for cell-specific context menu
+ */
+const onCellContextMenu = (event) => {
+  // If we're clicking on a cell that's not selected, select it first
+  const cellEl = event.target.closest('td.cell')
+  if (cellEl) {
+    const row = parseInt(cellEl.dataset.row)
+    const col = parseInt(cellEl.dataset.col)
+
+    if (!isNaN(row) && !isNaN(col)) {
+      if (!isSelectedCell(row, col) && !isInSelectedRange(row, col)) {
+        selectCell(row, col, { shiftKey: false })
+      }
+    }
+  }
+
+  showContextMenu(event)
+}
+
+/**
+ * Close context menu
+ */
+const closeContextMenu = () => {
+  contextMenuVisible.value = false
+}
+
+/**
+ * Handle context menu commands
+ */
+const handleContextMenuCommand = (command) => {
+  switch (command) {
+    case 'copy':
+      copySelectedCells()
+      break
+
+    case 'cut':
+      cutSelectedCells()
+      break
+
+    case 'paste':
+      pasteFromClipboard()
+      break
+
+    case 'insert-row-above':
+      if (selectedCell.row !== null) {
+        addRow(selectedCell.row)
+      }
+      break
+
+    case 'insert-row-below':
+      if (selectedCell.row !== null) {
+        addRow(selectedCell.row + 1)
+      }
+      break
+
+    case 'insert-column-left':
+      if (selectedCell.col !== null) {
+        addColumn(selectedCell.col)
+      }
+      break
+
+    case 'insert-column-right':
+      if (selectedCell.col !== null) {
+        addColumn(selectedCell.col + 1)
+      }
+      break
+
+    case 'clear-contents':
+      if (hasSelection()) {
+        const { startRow, startCol, endRow, endCol } = getSelectionBoundaries()
+        for (let row = startRow; row <= endRow; row++) {
+          for (let col = startCol; col <= endCol; col++) {
+            gridData[row][col] = ''
+          }
+        }
+      } else if (selectedCell.row !== null && selectedCell.col !== null) {
+        gridData[selectedCell.row][selectedCell.col] = ''
+      }
+      break
+
+    case 'clear-formatting':
+      if (hasSelection()) {
+        const { startRow, startCol, endRow, endCol } = getSelectionBoundaries()
+        for (let row = startRow; row <= endRow; row++) {
+          for (let col = startCol; col <= endCol; col++) {
+            updateCellFormatting(row, col, {
+              bold: false,
+              italic: false,
+              underline: false,
+              textColor: '#000000',
+              backgroundColor: 'transparent',
+              fontSize: '14px',
+              fontFamily: 'Arial, sans-serif',
+              align: 'center',
+              verticalAlign: 'middle',
+              textRotation: 0,
+              wrapText: false,
+            })
+          }
+        }
+      } else if (selectedCell.row !== null && selectedCell.col !== null) {
+        updateCellFormatting(selectedCell.row, selectedCell.col, {
+          bold: false,
+          italic: false,
+          underline: false,
+          textColor: '#000000',
+          backgroundColor: 'transparent',
+          fontSize: '14px',
+          fontFamily: 'Arial, sans-serif',
+          align: 'center',
+          verticalAlign: 'middle',
+          textRotation: 0,
+          wrapText: false,
+        })
+      }
+      break
+
+    case 'conditional-formatting':
+      console.log("hasSelection", hasSelection())
+      if (hasSelection()) {
+        openConditionalFormatting(getSelectionBoundaries())
+      } else if (selectedCell.row !== null && selectedCell.col !== null) {
+        openConditionalFormatting({
+          startRow: selectedCell.row,
+          startCol: selectedCell.col,
+          endRow: selectedCell.row,
+          endCol: selectedCell.col,
+        })
+      }
+      break
+  }
+}
+
+// Event handlers for conditional formatting panel
+const onChangeRuleType = (ruleType) => {
+  conditionalFormattingUI.selectedRuleType = ruleType
+}
+
+const onUpdateCriterion1 = (value) => {
+  conditionalFormattingUI.criterion1 = value
+}
+
+const onUpdateCriterion2 = (value) => {
+  conditionalFormattingUI.criterion2 = value
+}
+
+const onUpdateFormat = (format) => {
+  conditionalFormattingUI.selectedFormat = format
+}
 
 const setupKeyboardHandlers = () => {
   const handleGlobalKeyDown = (event) => {
@@ -240,22 +448,37 @@ const setupKeyboardHandlers = () => {
     if (event.ctrlKey) {
       const currentFormat = getCurrentCellFormatting()
       if (!currentFormat) return
-      
+
       if (event.key === 'b' || event.key === 'B') {
         event.preventDefault()
         applyFormatting({ bold: !currentFormat.bold })
         return
       }
-      
+
       if (event.key === 'i' || event.key === 'I') {
         event.preventDefault()
         applyFormatting({ italic: !currentFormat.italic })
         return
       }
-      
+
       if (event.key === 'u' || event.key === 'U') {
         event.preventDefault()
         applyFormatting({ underline: !currentFormat.underline })
+        return
+      }
+    }
+
+    // Close context menu on escape
+    if (event.key === 'Escape') {
+      if (contextMenuVisible.value) {
+        closeContextMenu()
+        event.preventDefault()
+        return
+      }
+
+      if (conditionalFormattingUI.isOpen) {
+        closeConditionalFormatting()
+        event.preventDefault()
         return
       }
     }
@@ -264,8 +487,14 @@ const setupKeyboardHandlers = () => {
   }
 
   document.addEventListener('keydown', handleGlobalKeyDown)
-}
 
+  // Close context menu when clicking outside
+  document.addEventListener('click', (event) => {
+    if (contextMenuVisible.value) {
+      closeContextMenu()
+    }
+  })
+}
 
 const addRowAtSelection = () => {
   let insertIndex
@@ -282,7 +511,6 @@ const addRowAtSelection = () => {
   addRow(insertIndex)
 }
 
-
 const addColumnAtSelection = () => {
   let insertIndex
 
@@ -298,16 +526,11 @@ const addColumnAtSelection = () => {
   addColumn(insertIndex)
 }
 
+
 onMounted(() => {
   setupKeyboardHandlers()
   resetSpreadsheet()
-  
-  if (typeof bootstrap !== 'undefined') {
-    const dropdownElementList = document.querySelectorAll('.dropdown-toggle');
-    dropdownElementList.forEach(dropdownToggleEl => {
-      new bootstrap.Dropdown(dropdownToggleEl);
-    });
-  }
+  applyConditionalFormattingToGrid()
 })
 </script>
 
@@ -354,5 +577,4 @@ onMounted(() => {
 td.cell {
   border: 1px solid #dee2e6 !important;
 }
-
 </style>
