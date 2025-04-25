@@ -214,16 +214,6 @@ export function useGridData() {
     cellFormatting[1][2].italic = true
     cellFormatting[1][2].textColor = '#0000ff'
 
-    cellFormatting[2][2].numberFormat = 'currency'
-    cellFormatting[2][2].currencySymbol = '$'
-    gridData[2][2] = '1000.12'
-
-    cellFormatting[2][3].numberFormat = 'percent'
-    gridData[2][3] = '0.25'
-
-    cellFormatting[3][2].numberFormat = 'scientific'
-    gridData[3][2] = '1000000'
-
     for (let i = 0; i < rowCount.value; i++) {
       rowHeights[i] = defaultRowHeight
     }

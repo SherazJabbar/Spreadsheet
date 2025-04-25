@@ -1,6 +1,6 @@
 <template>
   <div class="spreadsheet-header">
-    <h5 class="spreadsheet-title mb-3">Task: Spreadsheet</h5>
+    <h5 class="spreadsheet-title mb-3">Advanced Spreadsheet</h5>
 
     <!-- Main toolbar -->
     <div class="toolbar mb-3">
@@ -22,8 +22,12 @@
       <button class="btn btn-light btn-sm me-2" @click="$emit('add-row')">
         <i class="bi bi-plus"></i> Add Row
       </button>
-      <button class="btn btn-light btn-sm" @click="$emit('add-column')">
+      <button class="btn btn-light btn-sm me-2" @click="$emit('add-column')">
         <i class="bi bi-plus"></i> Add Column
+      </button>
+      <!-- New JSON Data Button -->
+      <button class="btn btn-info btn-sm" @click="$emit('toggle-json-panel')">
+        <i class="bi bi-braces"></i> JSON Data
       </button>
     </div>
 
@@ -215,10 +219,6 @@
               >Currency ($1,000.12)</a
             >
           </li>
-          <!-- <li><a class="dropdown-item" href="#" @click.prevent="setNumberFormat('date')">Date (9/26/2008)</a></li>
-          <li><a class="dropdown-item" href="#" @click.prevent="setNumberFormat('time')">Time (3:59:00 PM)</a></li>
-          <li><a class="dropdown-item" href="#" @click.prevent="setNumberFormat('datetime')">Date time (9/26/2008 15:59:00)</a></li>
-          <li><a class="dropdown-item" href="#" @click.prevent="setNumberFormat('duration')">Duration (24:01:00)</a></li> -->
         </ul>
       </div>
 
@@ -442,6 +442,9 @@
       <div class="mb-1">
         <strong>Formula Tip:</strong> Try entering a formula like =A1+B1 in a cell
       </div>
+      <div class="mb-1">
+        <strong>JSON Data:</strong> Access JSON data using =data.users[0].name or =data.product.price
+      </div>
       <div>
         <strong>Keyboard Shortcuts:</strong>
         <span class="shortcut"><kbd>Ctrl</kbd> + <kbd>C</kbd> Copy</span>
@@ -563,6 +566,7 @@ const emit = defineEmits([
   'add-row',
   'add-column',
   'update-formatting',
+  'toggle-json-panel', // New event for JSON panel
 ])
 
 const toggleFormat = (format) => {

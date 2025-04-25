@@ -8,6 +8,7 @@
         @add-row="addRowAtSelection"
         @add-column="addColumnAtSelection"
         @update-formatting="applyFormatting"
+        @toggle-json-panel="toggleJsonPanel"
         :current-formatting="getCurrentCellFormatting()"
       />
 
@@ -40,7 +41,6 @@
       </div>
     </div>
 
-    <!-- Context Menu Component -->
     <ContextMenu
       :is-visible="contextMenuVisible"
       :position="contextMenuPosition"
@@ -48,7 +48,6 @@
       @close="closeContextMenu"
     />
 
-    <!-- Conditional Formatting Panel -->
     <ConditionalFormattingPanel
       :is-open="conditionalFormattingUI.isOpen"
       :selected-range="conditionalFormattingUI.selectedRange"
@@ -72,7 +71,15 @@
       @update-format="onUpdateFormat"
     />
 
-    <!-- Toast Notification for copy/paste operations -->
+    <JsonDataPanel
+      :is-visible="jsonPanelVisible"
+      :current-json="jsonData"
+      :error="jsonError"
+      @close="closeJsonPanel"
+      @update-json="updateJsonData"
+      @json-error="onJsonError"
+    />
+
     <div class="position-fixed bottom-0 end-0 p-3" style="z-index: 11">
       <div
         class="toast align-items-center text-white bg-dark border-0"
@@ -97,262 +104,330 @@
   </div>
 </template>
 
-<script setup>
+<script>
 import { onMounted, ref } from 'vue'
 import SpreadsheetHeader from '@/components/SpreadsheetHeader.vue'
 import SpreadsheetTable from '@/components/SpreadsheetTable.vue'
 import ContextMenu from '@/components/ContextMenu.vue'
 import ConditionalFormattingPanel from '@/components/ConditionalFormattingPanel.vue'
+import JsonDataPanel from '@/components/DataPanel.vue'
 
 import { useGridData } from '@/composables/useGridData'
 import { useSelection } from '@/composables/useSelection'
-import { useFormulas } from '@/composables/useFormulas'
 import { useClipboard } from '@/composables/useClipboard'
 import { useExportImport } from '@/composables/useImportExport'
 import { useConditionalFormatting } from '@/composables/useConditionalFormatting'
+import { useJsonData } from '@/composables/useJsonData'
+import { evaluateFormulaValue } from '@/utils/formulaParser'
 
-// Get grid data with all formatting features
-const {
-  rowCount,
-  colCount,
-  columns,
-  rows,
-  gridData,
-  getCellFormatting,
-  updateCellFormatting,
-  applyFormattingToRange,
-  getRowHeight,
-  setRowHeight,
-  getColumnWidth,
-  setColumnWidth,
-  addRow,
-  addColumn,
-  resetSpreadsheet,
-} = useGridData()
+export default {
+  name: 'Spreadsheet',
+  components: {
+    SpreadsheetHeader,
+    SpreadsheetTable,
+    ContextMenu,
+    ConditionalFormattingPanel,
+    JsonDataPanel,
+  },
+  setup() {
+    const {
+      rowCount,
+      colCount,
+      columns,
+      rows,
+      gridData,
+      getCellFormatting,
+      updateCellFormatting,
+      applyFormattingToRange,
+      getRowHeight,
+      getColumnWidth,
+      setColumnWidth,
+      addRow,
+      addColumn,
+      resetSpreadsheet,
+    } = useGridData()
 
-// Use existing selection composable
-const {
-  selectedCell,
-  selectionRange,
-  editing,
-  editValue,
-  hasSelection,
-  getSelectionBoundaries,
-  isSelectedCell,
-  isInSelectedRange,
-  selectCell,
-  selectEntireRow,
-  selectEntireColumn,
-  startRangeSelection,
-  updateRangeSelection,
-  endRangeSelection,
-  editCell,
-  handleEditorKeyDown,
-  finishEditing,
-  handleKeyDown,
-} = useSelection(rowCount, colCount, gridData)
+    const {
+      jsonData,
+      jsonError,
+      jsonPanelVisible,
+      parseJsonData,
+      toggleJsonPanel,
+      getValueFromPath,
+    } = useJsonData()
 
-const { getColumnLabel, displayCellValue } =
-  useFormulas(rowCount, colCount, gridData)
+    const {
+      selectedCell,
+      selectionRange,
+      editing,
+      editValue,
+      hasSelection,
+      getSelectionBoundaries,
+      isSelectedCell,
+      isInSelectedRange,
+      selectCell,
+      selectEntireRow,
+      selectEntireColumn,
+      startRangeSelection,
+      updateRangeSelection,
+      endRangeSelection,
+      editCell,
+      handleEditorKeyDown,
+      finishEditing,
+      handleKeyDown,
+    } = useSelection(rowCount, colCount, gridData)
 
-const clipboardUtils = useClipboard(
-  gridData,
-  rowCount,
-  colCount,
-  selectedCell,
-  getSelectionBoundaries,
-  hasSelection,
-)
+    const getColumnLabel = (col) => {
+      let result = ''
+      while (col >= 0) {
+        result = String.fromCharCode(65 + (col % 26)) + result
+        col = Math.floor(col / 26) - 1
+      }
+      return result
+    }
 
-const { exportCSV, importCSV } = useExportImport(
-  rowCount,
-  colCount,
-  gridData,
-  getColumnLabel,
-  displayCellValue,
-)
+    const displayCellValue = (row, col) => {
+      if (row < 0 || row >= rowCount.value || col < 0 || col >= colCount.value) {
+        return ''
+      }
 
-const contextMenuVisible = ref(false)
-const contextMenuPosition = ref({ x: 0, y: 0 })
+      const value = gridData[row][col]
 
-const {
-  conditionalRules,
-  ruleTypes,
-  formatColors,
-  conditionalFormattingUI,
-  openConditionalFormatting,
-  closeConditionalFormatting,
-  addConditionalRule,
-  editConditionalRule,
-  updateConditionalRule,
-  deleteConditionalRule,
-  applyConditionalFormattingToGrid,
-} = useConditionalFormatting(rowCount, colCount, gridData, getCellFormatting, updateCellFormatting)
+      if (typeof value === 'string' && value.startsWith('=')) {
+        return evaluateFormulaValue(value, gridData, rowCount.value, colCount.value)
+      }
 
-const copySelectedCells = () => {
-  clipboardUtils.copySelectedCells()
-  showToastNotification()
-}
+      return value
+    }
 
-const cutSelectedCells = () => {
-  clipboardUtils.cutSelectedCells()
-}
+    const clipboardUtils = useClipboard(
+      gridData,
+      rowCount,
+      colCount,
+      selectedCell,
+      getSelectionBoundaries,
+      hasSelection,
+    )
 
-const pasteFromClipboard = async () => {
-  return await clipboardUtils.pasteFromClipboard()
-}
+    const { exportCSV, importCSV } = useExportImport(
+      rowCount,
+      colCount,
+      gridData,
+      getColumnLabel,
+      displayCellValue,
+    )
 
-const startResize = (event, colIndex) => {
-  const startX = event.clientX
-  const startWidth = getColumnWidth(colIndex)
+    const {
+      conditionalRules,
+      ruleTypes,
+      formatColors,
+      conditionalFormattingUI,
+      openConditionalFormatting,
+      closeConditionalFormatting,
+      addConditionalRule,
+      editConditionalRule,
+      updateConditionalRule,
+      deleteConditionalRule,
+      applyConditionalFormattingToGrid,
+    } = useConditionalFormatting(
+      rowCount,
+      colCount,
+      gridData,
+      getCellFormatting,
+      updateCellFormatting,
+      displayCellValue,
+    )
 
-  const handleMouseMove = (moveEvent) => {
-    const delta = moveEvent.clientX - startX
-    const newWidth = Math.max(50, startWidth + delta)
-    setColumnWidth(colIndex, newWidth)
-  }
+    const contextMenuVisible = ref(false)
+    const contextMenuPosition = ref({ x: 0, y: 0 })
 
-  const handleMouseUp = () => {
-    document.removeEventListener('mousemove', handleMouseMove)
-    document.removeEventListener('mouseup', handleMouseUp)
-  }
+    const copySelectedCells = () => {
+      clipboardUtils.copySelectedCells()
+      showToastNotification()
+    }
 
-  document.addEventListener('mousemove', handleMouseMove)
-  document.addEventListener('mouseup', handleMouseUp)
-}
+    const cutSelectedCells = () => {
+      clipboardUtils.cutSelectedCells()
+    }
 
-const getCurrentCellFormatting = () => {
-  if (hasSelection()) {
-    const { startRow, startCol } = getSelectionBoundaries()
-    return getCellFormatting(startRow, startCol)
-  } else if (selectedCell.row !== null && selectedCell.col !== null) {
-    return getCellFormatting(selectedCell.row, selectedCell.col)
-  }
-  return null
-}
+    const pasteFromClipboard = async () => {
+      return await clipboardUtils.pasteFromClipboard()
+    }
 
-const applyFormatting = (formatting) => {
-  if (hasSelection()) {
-    const { startRow, startCol, endRow, endCol } = getSelectionBoundaries()
-    applyFormattingToRange(startRow, startCol, endRow, endCol, formatting)
-  } else if (selectedCell.row !== null && selectedCell.col !== null) {
-    updateCellFormatting(selectedCell.row, selectedCell.col, formatting)
-  }
+    const startResize = (event, colIndex) => {
+      const startX = event.clientX
+      const startWidth = getColumnWidth(colIndex)
 
-  const tempRow = selectedCell.row
-  selectedCell.row = -1
-  setTimeout(() => {
-    selectedCell.row = tempRow
-  }, 0)
-}
+      const handleMouseMove = (moveEvent) => {
+        const delta = moveEvent.clientX - startX
+        const newWidth = Math.max(50, startWidth + delta)
+        setColumnWidth(colIndex, newWidth)
+      }
 
-const showToastNotification = () => {
-  const statusEl = document.getElementById('copy-status')
-  if (statusEl && typeof bootstrap !== 'undefined') {
-    const toast = new bootstrap.Toast(statusEl)
-    toast.show()
-  }
-}
+      const handleMouseUp = () => {
+        document.removeEventListener('mousemove', handleMouseMove)
+        document.removeEventListener('mouseup', handleMouseUp)
+      }
 
-/**
- * Show context menu at the specified position
- */
-const showContextMenu = (event) => {
-  // Only show if we clicked inside the spreadsheet grid
-  if (event.target.closest('.spreadsheet-table')) {
-    contextMenuPosition.value = { x: event.clientX, y: event.clientY }
-    contextMenuVisible.value = true
-    event.preventDefault()
-  }
-}
+      document.addEventListener('mousemove', handleMouseMove)
+      document.addEventListener('mouseup', handleMouseUp)
+    }
 
-/**
- * Handler for cell-specific context menu
- */
-const onCellContextMenu = (event) => {
-  // If we're clicking on a cell that's not selected, select it first
-  const cellEl = event.target.closest('td.cell')
-  if (cellEl) {
-    const row = parseInt(cellEl.dataset.row)
-    const col = parseInt(cellEl.dataset.col)
+    const getCurrentCellFormatting = () => {
+      if (hasSelection()) {
+        const { startRow, startCol } = getSelectionBoundaries()
+        return getCellFormatting(startRow, startCol)
+      } else if (selectedCell.row !== null && selectedCell.col !== null) {
+        return getCellFormatting(selectedCell.row, selectedCell.col)
+      }
+      return null
+    }
 
-    if (!isNaN(row) && !isNaN(col)) {
-      if (!isSelectedCell(row, col) && !isInSelectedRange(row, col)) {
-        selectCell(row, col, { shiftKey: false })
+    const applyFormatting = (formatting) => {
+      if (hasSelection()) {
+        const { startRow, startCol, endRow, endCol } = getSelectionBoundaries()
+        applyFormattingToRange(startRow, startCol, endRow, endCol, formatting)
+      } else if (selectedCell.row !== null && selectedCell.col !== null) {
+        updateCellFormatting(selectedCell.row, selectedCell.col, formatting)
+      }
+
+      const tempRow = selectedCell.row
+      selectedCell.row = -1
+      setTimeout(() => {
+        selectedCell.row = tempRow
+      }, 0)
+    }
+
+    const showToastNotification = () => {
+      const statusEl = document.getElementById('copy-status')
+      if (statusEl && typeof bootstrap !== 'undefined') {
+        const toast = new bootstrap.Toast(statusEl)
+        toast.show()
       }
     }
-  }
 
-  showContextMenu(event)
-}
+    const closeJsonPanel = () => {
+      jsonPanelVisible.value = false
+    }
 
-/**
- * Close context menu
- */
-const closeContextMenu = () => {
-  contextMenuVisible.value = false
-}
+    const updateJsonData = (newJsonData) => {
+      jsonData.value = newJsonData
+      const tempRow = selectedCell.row
+      selectedCell.row = -1
+      setTimeout(() => {
+        selectedCell.row = tempRow
+        applyConditionalFormattingToGrid()
+      }, 0)
+    }
 
-/**
- * Handle context menu commands
- */
-const handleContextMenuCommand = (command) => {
-  switch (command) {
-    case 'copy':
-      copySelectedCells()
-      break
+    const onJsonError = (error) => {
+      jsonError.value = error
+    }
 
-    case 'cut':
-      cutSelectedCells()
-      break
-
-    case 'paste':
-      pasteFromClipboard()
-      break
-
-    case 'insert-row-above':
-      if (selectedCell.row !== null) {
-        addRow(selectedCell.row)
+   
+    const showContextMenu = (event) => {
+      if (event.target.closest('.spreadsheet-table')) {
+        contextMenuPosition.value = { x: event.clientX, y: event.clientY }
+        contextMenuVisible.value = true
+        event.preventDefault()
       }
-      break
+    }
 
-    case 'insert-row-below':
-      if (selectedCell.row !== null) {
-        addRow(selectedCell.row + 1)
-      }
-      break
 
-    case 'insert-column-left':
-      if (selectedCell.col !== null) {
-        addColumn(selectedCell.col)
-      }
-      break
+    const onCellContextMenu = (event) => {
+      const cellEl = event.target.closest('td.cell')
+      if (cellEl) {
+        const row = parseInt(cellEl.dataset.row)
+        const col = parseInt(cellEl.dataset.col)
 
-    case 'insert-column-right':
-      if (selectedCell.col !== null) {
-        addColumn(selectedCell.col + 1)
-      }
-      break
-
-    case 'clear-contents':
-      if (hasSelection()) {
-        const { startRow, startCol, endRow, endCol } = getSelectionBoundaries()
-        for (let row = startRow; row <= endRow; row++) {
-          for (let col = startCol; col <= endCol; col++) {
-            gridData[row][col] = ''
+        if (!isNaN(row) && !isNaN(col)) {
+          if (!isSelectedCell(row, col) && !isInSelectedRange(row, col)) {
+            selectCell(row, col, { shiftKey: false })
           }
         }
-      } else if (selectedCell.row !== null && selectedCell.col !== null) {
-        gridData[selectedCell.row][selectedCell.col] = ''
       }
-      break
 
-    case 'clear-formatting':
-      if (hasSelection()) {
-        const { startRow, startCol, endRow, endCol } = getSelectionBoundaries()
-        for (let row = startRow; row <= endRow; row++) {
-          for (let col = startCol; col <= endCol; col++) {
-            updateCellFormatting(row, col, {
+      showContextMenu(event)
+    }
+
+  
+    const closeContextMenu = () => {
+      contextMenuVisible.value = false
+    }
+
+    const handleContextMenuCommand = (command) => {
+      switch (command) {
+        case 'copy':
+          copySelectedCells()
+          break
+
+        case 'cut':
+          cutSelectedCells()
+          break
+
+        case 'paste':
+          pasteFromClipboard()
+          break
+
+        case 'insert-row-above':
+          if (selectedCell.row !== null) {
+            addRow(selectedCell.row)
+          }
+          break
+
+        case 'insert-row-below':
+          if (selectedCell.row !== null) {
+            addRow(selectedCell.row + 1)
+          }
+          break
+
+        case 'insert-column-left':
+          if (selectedCell.col !== null) {
+            addColumn(selectedCell.col)
+          }
+          break
+
+        case 'insert-column-right':
+          if (selectedCell.col !== null) {
+            addColumn(selectedCell.col + 1)
+          }
+          break
+
+        case 'clear-contents':
+          if (hasSelection()) {
+            const { startRow, startCol, endRow, endCol } = getSelectionBoundaries()
+            for (let row = startRow; row <= endRow; row++) {
+              for (let col = startCol; col <= endCol; col++) {
+                gridData[row][col] = ''
+              }
+            }
+          } else if (selectedCell.row !== null && selectedCell.col !== null) {
+            gridData[selectedCell.row][selectedCell.col] = ''
+          }
+          break
+
+        case 'clear-formatting':
+          if (hasSelection()) {
+            const { startRow, startCol, endRow, endCol } = getSelectionBoundaries()
+            for (let row = startRow; row <= endRow; row++) {
+              for (let col = startCol; col <= endCol; col++) {
+                updateCellFormatting(row, col, {
+                  bold: false,
+                  italic: false,
+                  underline: false,
+                  textColor: '#000000',
+                  backgroundColor: 'transparent',
+                  fontSize: '14px',
+                  fontFamily: 'Arial, sans-serif',
+                  align: 'center',
+                  verticalAlign: 'middle',
+                  textRotation: 0,
+                  wrapText: false,
+                })
+              }
+            }
+          } else if (selectedCell.row !== null && selectedCell.col !== null) {
+            updateCellFormatting(selectedCell.row, selectedCell.col, {
               bold: false,
               italic: false,
               underline: false,
@@ -366,172 +441,237 @@ const handleContextMenuCommand = (command) => {
               wrapText: false,
             })
           }
+          break
+
+        case 'conditional-formatting':
+          if (hasSelection()) {
+            openConditionalFormatting(getSelectionBoundaries())
+          } else if (selectedCell.row !== null && selectedCell.col !== null) {
+            openConditionalFormatting({
+              startRow: selectedCell.row,
+              startCol: selectedCell.col,
+              endRow: selectedCell.row,
+              endCol: selectedCell.col,
+            })
+          }
+          break
+      }
+    }
+
+    const onChangeRuleType = (ruleType) => {
+      conditionalFormattingUI.selectedRuleType = ruleType
+    }
+
+    const onUpdateCriterion1 = (value) => {
+      conditionalFormattingUI.criterion1 = value
+    }
+
+    const onUpdateCriterion2 = (value) => {
+      conditionalFormattingUI.criterion2 = value
+    }
+
+    const onUpdateFormat = (format) => {
+      conditionalFormattingUI.selectedFormat = format
+    }
+
+    const setupKeyboardHandlers = () => {
+      const handleGlobalKeyDown = (event) => {
+        if (editing.row !== null && editing.col !== null) return
+
+        if (event.ctrlKey && (event.key === 'c' || event.key === 'C')) {
+          event.preventDefault()
+          copySelectedCells()
+          return
         }
-      } else if (selectedCell.row !== null && selectedCell.col !== null) {
-        updateCellFormatting(selectedCell.row, selectedCell.col, {
-          bold: false,
-          italic: false,
-          underline: false,
-          textColor: '#000000',
-          backgroundColor: 'transparent',
-          fontSize: '14px',
-          fontFamily: 'Arial, sans-serif',
-          align: 'center',
-          verticalAlign: 'middle',
-          textRotation: 0,
-          wrapText: false,
-        })
-      }
-      break
 
-    case 'conditional-formatting':
-      console.log("hasSelection", hasSelection())
+        if (event.ctrlKey && (event.key === 'v' || event.key === 'V')) {
+          event.preventDefault()
+          const pasteResult = pasteFromClipboard()
+          if (pasteResult) {
+            selectionRange.startRow = pasteResult.startRow
+            selectionRange.startCol = pasteResult.startCol
+            selectionRange.endRow = pasteResult.endRow
+            selectionRange.endCol = pasteResult.endCol
+          }
+          return
+        }
+
+        if (event.ctrlKey && (event.key === 'x' || event.key === 'X')) {
+          event.preventDefault()
+          cutSelectedCells()
+          return
+        }
+
+        if (event.ctrlKey) {
+          const currentFormat = getCurrentCellFormatting()
+          if (!currentFormat) return
+
+          if (event.key === 'b' || event.key === 'B') {
+            event.preventDefault()
+            applyFormatting({ bold: !currentFormat.bold })
+            return
+          }
+
+          if (event.key === 'i' || event.key === 'I') {
+            event.preventDefault()
+            applyFormatting({ italic: !currentFormat.italic })
+            return
+          }
+
+          if (event.key === 'u' || event.key === 'U') {
+            event.preventDefault()
+            applyFormatting({ underline: !currentFormat.underline })
+            return
+          }
+        }
+
+        if (event.key === 'Escape') {
+          if (contextMenuVisible.value) {
+            closeContextMenu()
+            event.preventDefault()
+            return
+          }
+
+          if (conditionalFormattingUI.isOpen) {
+            closeConditionalFormatting()
+            event.preventDefault()
+            return
+          }
+
+          if (jsonPanelVisible.value) {
+            closeJsonPanel()
+            event.preventDefault()
+            return
+          }
+        }
+
+        handleKeyDown(event)
+      }
+
+      document.addEventListener('keydown', handleGlobalKeyDown)
+
+      document.addEventListener('click', (event) => {
+        if (contextMenuVisible.value) {
+          closeContextMenu()
+        }
+      })
+    }
+
+    const addRowAtSelection = () => {
+      let insertIndex
+
       if (hasSelection()) {
-        openConditionalFormatting(getSelectionBoundaries())
-      } else if (selectedCell.row !== null && selectedCell.col !== null) {
-        openConditionalFormatting({
-          startRow: selectedCell.row,
-          startCol: selectedCell.col,
-          endRow: selectedCell.row,
-          endCol: selectedCell.col,
-        })
+        const { endRow } = getSelectionBoundaries()
+        insertIndex = endRow + 1
+      } else if (selectedCell.row !== null) {
+        insertIndex = selectedCell.row + 1
+      } else {
+        insertIndex = rowCount.value
       }
-      break
-  }
-}
 
-// Event handlers for conditional formatting panel
-const onChangeRuleType = (ruleType) => {
-  conditionalFormattingUI.selectedRuleType = ruleType
-}
-
-const onUpdateCriterion1 = (value) => {
-  conditionalFormattingUI.criterion1 = value
-}
-
-const onUpdateCriterion2 = (value) => {
-  conditionalFormattingUI.criterion2 = value
-}
-
-const onUpdateFormat = (format) => {
-  conditionalFormattingUI.selectedFormat = format
-}
-
-const setupKeyboardHandlers = () => {
-  const handleGlobalKeyDown = (event) => {
-    if (editing.row !== null && editing.col !== null) return
-
-    if (event.ctrlKey && (event.key === 'c' || event.key === 'C')) {
-      event.preventDefault()
-      copySelectedCells()
-      return
+      addRow(insertIndex)
     }
 
-    if (event.ctrlKey && (event.key === 'v' || event.key === 'V')) {
-      event.preventDefault()
-      const pasteResult = pasteFromClipboard()
-      if (pasteResult) {
-        selectionRange.startRow = pasteResult.startRow
-        selectionRange.startCol = pasteResult.startCol
-        selectionRange.endRow = pasteResult.endRow
-        selectionRange.endCol = pasteResult.endCol
+    const addColumnAtSelection = () => {
+      let insertIndex
+
+      if (hasSelection()) {
+        const { endCol } = getSelectionBoundaries()
+        insertIndex = endCol + 1
+      } else if (selectedCell.col !== null) {
+        insertIndex = selectedCell.col + 1
+      } else {
+        insertIndex = colCount.value
       }
-      return
+
+      addColumn(insertIndex)
     }
 
-    if (event.ctrlKey && (event.key === 'x' || event.key === 'X')) {
-      event.preventDefault()
-      cutSelectedCells()
-      return
+    onMounted(() => {
+      setupKeyboardHandlers()
+      resetSpreadsheet()
+      applyConditionalFormattingToGrid()
+    })
+
+    return {
+      rowCount,
+      colCount,
+      columns,
+      rows,
+      gridData,
+
+      getCellFormatting,
+      updateCellFormatting,
+      applyFormatting,
+      getCurrentCellFormatting,
+      getRowHeight,
+      getColumnWidth,
+
+      selectedCell,
+      editing,
+      editValue,
+      isSelectedCell,
+      isInSelectedRange,
+      selectCell,
+      selectEntireRow,
+      selectEntireColumn,
+      hasSelection,
+      getSelectionBoundaries,
+      editCell,
+      handleEditorKeyDown,
+      finishEditing,
+
+      startRangeSelection,
+      updateRangeSelection,
+      endRangeSelection,
+
+      startResize,
+
+      displayCellValue,
+      getColumnLabel,
+
+      exportCSV,
+      importCSV,
+      resetSpreadsheet,
+      addRowAtSelection,
+      addColumnAtSelection,
+
+      contextMenuVisible,
+      contextMenuPosition,
+      showContextMenu,
+      closeContextMenu,
+      handleContextMenuCommand,
+      onCellContextMenu,
+
+      copySelectedCells,
+      cutSelectedCells,
+      pasteFromClipboard,
+
+      conditionalFormattingUI,
+      conditionalRules,
+      ruleTypes,
+      formatColors,
+      openConditionalFormatting,
+      closeConditionalFormatting,
+      addConditionalRule,
+      editConditionalRule,
+      updateConditionalRule,
+      deleteConditionalRule,
+      onChangeRuleType,
+      onUpdateCriterion1,
+      onUpdateCriterion2,
+      onUpdateFormat,
+
+      jsonData,
+      jsonError,
+      jsonPanelVisible,
+      toggleJsonPanel,
+      closeJsonPanel,
+      updateJsonData,
+      onJsonError,
     }
-
-    if (event.ctrlKey) {
-      const currentFormat = getCurrentCellFormatting()
-      if (!currentFormat) return
-
-      if (event.key === 'b' || event.key === 'B') {
-        event.preventDefault()
-        applyFormatting({ bold: !currentFormat.bold })
-        return
-      }
-
-      if (event.key === 'i' || event.key === 'I') {
-        event.preventDefault()
-        applyFormatting({ italic: !currentFormat.italic })
-        return
-      }
-
-      if (event.key === 'u' || event.key === 'U') {
-        event.preventDefault()
-        applyFormatting({ underline: !currentFormat.underline })
-        return
-      }
-    }
-
-    // Close context menu on escape
-    if (event.key === 'Escape') {
-      if (contextMenuVisible.value) {
-        closeContextMenu()
-        event.preventDefault()
-        return
-      }
-
-      if (conditionalFormattingUI.isOpen) {
-        closeConditionalFormatting()
-        event.preventDefault()
-        return
-      }
-    }
-
-    handleKeyDown(event)
-  }
-
-  document.addEventListener('keydown', handleGlobalKeyDown)
-
-  // Close context menu when clicking outside
-  document.addEventListener('click', (event) => {
-    if (contextMenuVisible.value) {
-      closeContextMenu()
-    }
-  })
+  },
 }
-
-const addRowAtSelection = () => {
-  let insertIndex
-
-  if (hasSelection()) {
-    const { endRow } = getSelectionBoundaries()
-    insertIndex = endRow + 1
-  } else if (selectedCell.row !== null) {
-    insertIndex = selectedCell.row + 1
-  } else {
-    insertIndex = rowCount.value
-  }
-
-  addRow(insertIndex)
-}
-
-const addColumnAtSelection = () => {
-  let insertIndex
-
-  if (hasSelection()) {
-    const { endCol } = getSelectionBoundaries()
-    insertIndex = endCol + 1
-  } else if (selectedCell.col !== null) {
-    insertIndex = selectedCell.col + 1
-  } else {
-    insertIndex = colCount.value
-  }
-
-  addColumn(insertIndex)
-}
-
-
-onMounted(() => {
-  setupKeyboardHandlers()
-  resetSpreadsheet()
-  applyConditionalFormattingToGrid()
-})
 </script>
 
 <style scoped>

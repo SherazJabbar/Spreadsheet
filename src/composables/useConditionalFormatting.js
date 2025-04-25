@@ -1,5 +1,5 @@
-import { ref, reactive, computed, watch, nextTick } from 'vue'
-import { evaluateFormula } from '../utils/formulaParser'
+import { ref, reactive, watch, nextTick } from 'vue'
+import { evaluateFormula, evaluateCustomExpression } from '@/utils/formulaParser'
 
 export function useConditionalFormatting(
   rowCount,
@@ -7,6 +7,7 @@ export function useConditionalFormatting(
   gridData,
   getCellFormatting,
   updateCellFormatting,
+  displayCellValue,
 ) {
   const conditionalRules = ref([])
 
@@ -30,6 +31,7 @@ export function useConditionalFormatting(
     { id: 'between', label: 'Is between' },
     { id: 'not_between', label: 'Is not between' },
     { id: 'custom_formula', label: 'Custom formula is' },
+    { id: 'custom_expression', label: 'Custom expression' },
   ]
 
   const formatColors = [
@@ -68,13 +70,8 @@ export function useConditionalFormatting(
     },
   })
 
-  // Track cells with conditional formatting for better performance
   const cellsWithConditionalFormatting = reactive(new Set())
 
-  /**
-   * Open the conditional formatting UI with a specific range
-   * @param {Object} range - The selected cell range
-   */
   const openConditionalFormatting = (range) => {
     conditionalFormattingUI.isOpen = true
     conditionalFormattingUI.selectedRange = { ...range }
@@ -91,11 +88,7 @@ export function useConditionalFormatting(
     }
   }
 
-  /**
-   * Create a new conditional formatting rule
-   */
   const addConditionalRule = () => {
-    console.log('conditionalFormattingUI', conditionalFormattingUI)
     const { startRow, startCol, endRow, endCol } = conditionalFormattingUI.selectedRange
 
     const newRule = {
@@ -115,14 +108,9 @@ export function useConditionalFormatting(
     conditionalRules.value.push(newRule)
     conditionalFormattingUI.isOpen = false
 
-    // Apply the rule to the current grid data
     applyConditionalFormattingToGrid()
   }
 
-  /**
-   * Edit an existing conditional formatting rule
-   * @param {number} ruleId - ID of the rule to edit
-   */
   const editConditionalRule = (ruleId) => {
     const rule = conditionalRules.value.find((r) => r.id === ruleId)
     if (rule) {
@@ -136,9 +124,6 @@ export function useConditionalFormatting(
     }
   }
 
-  /**
-   * Update an existing conditional formatting rule
-   */
   const updateConditionalRule = () => {
     const ruleIndex = conditionalRules.value.findIndex(
       (r) => r.id === conditionalFormattingUI.editingRule,
@@ -155,45 +140,30 @@ export function useConditionalFormatting(
 
       conditionalFormattingUI.isOpen = false
 
-      // Apply updated rules to the grid
       applyConditionalFormattingToGrid()
     }
   }
 
-  /**
-   * Delete a conditional formatting rule
-   * @param {number} ruleId - ID of the rule to delete
-   */
   const deleteConditionalRule = (ruleId) => {
     const ruleIndex = conditionalRules.value.findIndex((r) => r.id === ruleId)
     if (ruleIndex !== -1) {
       conditionalRules.value.splice(ruleIndex, 1)
 
-      // Apply remaining rules to the grid
       applyConditionalFormattingToGrid()
     }
   }
 
-  /**
-   * Close the conditional formatting UI
-   */
   const closeConditionalFormatting = () => {
     conditionalFormattingUI.isOpen = false
   }
 
-  /**
-   * Evaluate if a cell meets a condition
-   * @param {*} cellValue - The value of the cell
-   * @param {Object} rule - The rule to evaluate
-   * @param {number} row - Row index of the cell
-   * @param {number} col - Column index of the cell
-   * @returns {boolean} - Whether the condition is met
-   */
-  const evaluateCondition = (cellValue, rule, row, col) => {
-    console.log('evaluateCondition', rule)
-    // Handle empty values
+  const evaluateCondition = (row, col, rule) => {
+    const cellValue = displayCellValue ? displayCellValue(row, col) : gridData[row][col]
+
     if (cellValue === undefined || cellValue === null) {
-      cellValue = ''
+      if (rule.type === 'empty') return true
+      if (rule.type === 'not_empty') return false
+      return false
     }
 
     const value = String(cellValue).trim()
@@ -285,6 +255,9 @@ export function useConditionalFormatting(
         case 'custom_formula':
           return evaluateFormula(rule.criterion1, gridData, rowCount.value, colCount.value)
 
+        case 'custom_expression':
+          return evaluateCustomExpression(rule.criterion1, cellValue)
+
         default:
           return false
       }
@@ -294,16 +267,9 @@ export function useConditionalFormatting(
     }
   }
 
-  /**
-   * Apply all conditional formatting rules to the grid
-   * Optimized version that only updates cells that need to change
-   */
   const applyConditionalFormattingToGrid = () => {
-    // Create a map to track formatting changes
     const formattingChanges = new Map()
-    console.log('cellsWithConditionalFormatting', cellsWithConditionalFormatting)
 
-    // First, reset any cells that have conditional formatting
     for (const cellKey of cellsWithConditionalFormatting) {
       const [row, col] = cellKey.split('-').map(Number)
 
@@ -314,7 +280,6 @@ export function useConditionalFormatting(
 
       const currentFormatting = getCellFormatting(row, col)
 
-      // Reset conditional formatting properties
       const resetFormat = { ...currentFormatting }
 
       if (resetFormat._conditionalBackground) {
@@ -345,28 +310,20 @@ export function useConditionalFormatting(
       formattingChanges.set(cellKey, { row, col, formatting: resetFormat })
     }
 
-    // Clear the set of cells with conditional formatting
     cellsWithConditionalFormatting.clear()
 
-    console.log('conditionalRules.value', conditionalRules.value)
-
-    // Now apply each rule
     for (const rule of conditionalRules.value) {
       const { startRow, startCol, endRow, endCol } = rule.range
 
       for (let row = startRow; row <= endRow; row++) {
         for (let col = startCol; col <= endCol; col++) {
-          // Skip out-of-bounds cells
           if (row >= rowCount.value || col >= colCount.value) continue
 
-          const cellValue = gridData[row][col]
           const cellKey = `${row}-${col}`
 
-          if (evaluateCondition(cellValue, rule, row, col)) {
-            // Track this cell as having conditional formatting
+          if (evaluateCondition(row, col, rule)) {
             cellsWithConditionalFormatting.add(cellKey)
 
-            // Get current formatting for this cell
             let newFormatting
 
             if (formattingChanges.has(cellKey)) {
@@ -377,7 +334,6 @@ export function useConditionalFormatting(
               formattingChanges.set(cellKey, { row, col, formatting: newFormatting })
             }
 
-            // Apply rule formatting
             if (rule.format.backgroundColor) {
               newFormatting.backgroundColor = rule.format.backgroundColor
               newFormatting._conditionalBackground = true
@@ -407,13 +363,11 @@ export function useConditionalFormatting(
       }
     }
 
-    // Apply all formatting changes at once
     for (const change of formattingChanges.values()) {
       updateCellFormatting(change.row, change.col, change.formatting)
     }
   }
 
-  // Watch for changes to grid data and rules
   watch(
     () => [...gridData.map((row) => [...row])],
     () => {
@@ -434,7 +388,6 @@ export function useConditionalFormatting(
     { deep: true },
   )
 
-  // Return the public API
   return {
     conditionalRules,
     ruleTypes,
